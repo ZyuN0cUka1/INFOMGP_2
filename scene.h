@@ -124,9 +124,15 @@ public:
   
   //return the current inverted inertia tensor around the current COM. Update it by applying the orientation
   Matrix3d getCurrInvInertiaTensor(){
-   /********
-    TODO: complete from Practical 1
-    *******/
+      Matrix3d R = Q2RotMatrix(orientation);
+
+      /***************
+       TODO
+       ***************/
+      Matrix3d IT = invIT.inverse();
+      Matrix3d I = R * IT * R.transpose();
+      Matrix3d iIT = I.inverse();
+      return iIT;  //change this to your result
   }
   
   
@@ -135,14 +141,24 @@ public:
   void updatePosition(double timeStep){
     //just forward Euler now
     if (isFixed)
-      return;  //a fixed object is immobile
-    
-    /********
-     TODO: complete from Practical 1
-     *******/
-    
-    for (int i=0;i<currV.rows();i++)
-      currV.row(i)<<QRot(origV.row(i), orientation)+COM;
+        return;  //a fixed object is immobile
+
+    /***************
+    TODO
+    ***************/
+
+    COM += comVelocity * timeStep;
+
+    RowVector4d deltaq(0, angVelocity(0), angVelocity(1), angVelocity(2));
+    deltaq(0) = -orientation(1) * angVelocity(0) - orientation(2) * angVelocity(1) - orientation(3) * angVelocity(2);
+    deltaq(1) = orientation(0) * angVelocity(0) + orientation(3) * angVelocity(1) - orientation(2) * angVelocity(2);
+    deltaq(2) = -orientation(3) * angVelocity(0) + orientation(0) * angVelocity(1) + orientation(1) * angVelocity(2);
+    deltaq(3) = orientation(2) * angVelocity(0) - orientation(1) * angVelocity(1) + orientation(0) * angVelocity(2);
+    deltaq *= timeStep / 2;
+    orientation += deltaq;
+    orientation /= orientation.norm();
+    for (int i = 0; i < currV.rows(); i++)
+        currV.row(i) << QRot(origV.row(i), orientation) + COM;
   }
   
   
@@ -200,24 +216,24 @@ public:
   
   //Updating the linear and angular velocities of the object
   //You need to modify this to integrate from acceleration in the field (basically gravity)
-  void updateVelocity(double timeStep){
-    
-    if (isFixed)
-      return;
-    
-    /********
-     TODO: complete from Practical 1
-     *******/
+  void updateVelocity(double timeStep, double ARCoeff) {
+
+      if (isFixed)
+          return;
+
+      //integrating external forces (only gravity)
+      Vector3d gravity; gravity << 0, -9.8, 0.0;
+      comVelocity += gravity * timeStep;
+      double dragcoeff = 1 - ARCoeff * timeStep / totalMass;
+      comVelocity *= dragcoeff;
+      angVelocity *= dragcoeff;
+      //cout << "angv:" << angVelocity.norm() << endl;
+      //cout << "comv:" << comVelocity.norm() << endl;
+  } 
+
+  void integrate(double timeStep, double ARCoeff) {
+
   }
-  
-  
-  //the full integration for the time step (velocity + position)
-  //You need to modify this if you are changing the integration
-  void integrate(double timeStep){
-    updateVelocity(timeStep);
-    updatePosition(timeStep);
-  }
-  
   
   Mesh(const MatrixXd& _V, const MatrixXi& _F, const MatrixXi& _T, const double density, const bool _isFixed, const RowVector3d& _COM, const RowVector4d& _orientation){
     origV=_V;
@@ -304,7 +320,7 @@ public:
     
     double invMass1 = (m1.isFixed ? 0.0 : 1.0/m1.totalMass);  //fixed meshes have infinite mass
     double invMass2 = (m2.isFixed ? 0.0 : 1.0/m2.totalMass);
-  
+
     /***************
      TODO: practical 2
      update m(1,2) comVelocity, angVelocity and COM variables by using a Constraint class of type COLLISION
@@ -320,11 +336,11 @@ public:
    
    You do not need to update this function in Practical 2
    *********************************************************************/
-  void updateScene(const double timeStep, const double CRCoeff, const double tolerance, const int maxIterations){
+  void updateScene(const double timeStep, const double CRCoeff, const double ARCeoff, const double tolerance, const int maxIterations){
     
     //integrating velocity, position and orientation from forces and previous states
     for (int i=0;i<meshes.size();i++)
-      meshes[i].integrate(timeStep);
+      meshes[i].integrate(timeStep, ARCoeff);
     
 
     //detecting and handling collisions when found
@@ -549,12 +565,5 @@ void center(const void *_obj,ccd_vec3_t *center)
   for (int i=0;i<3;i++)
     center->v[i]=obj->COM(i);
 }
-
-
-
-
-
-
-
 
 #endif
