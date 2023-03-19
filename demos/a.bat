@@ -1,0 +1,1 @@
+call Practical2_bin.exe ../data tower_chain-scene.txt tower_chain-constraints.txt
