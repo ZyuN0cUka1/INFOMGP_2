@@ -132,6 +132,8 @@ public:
 		Matrix3d IT = invIT.inverse();
 		Matrix3d I = R * IT * R.transpose();
 		Matrix3d iIT = I.inverse();
+		if (isFixed)
+			iIT.setZero();  //infinite resistance to rotation
 		return iIT;  //change this to your result
 	}
 
@@ -322,48 +324,30 @@ public:
 		//std::cout<<"contactNormal: "<<contactNormal<<std::endl;
 		//std::cout<<"penPosition: "<<penPosition<<std::endl;
 
-		double invMass1 = (m1.isFixed ? 0.0 : 1.0 / m1.totalMass);  //fixed meshes have infinite mass
+ 		double invMass1 = (m1.isFixed ? 0.0 : 1.0 / m1.totalMass);  //fixed meshes have infinite mass
 		double invMass2 = (m2.isFixed ? 0.0 : 1.0 / m2.totalMass);
 
-		const ConstraintType constraintType;
-		const ConstraintEqualityType constraintEqualityType;
-
-		Constraint cons(COLLISION, INEQUALITY, 0.0, 0.0, 0.0, 0.0, invMass1, invMass2, RowVector3d::Zero(), 0.0, 0.0);
-
-		RowVector3d origConstPos1 = m1.origV.row(cons.v1);
-		RowVector3d origConstPos2 = m2.origV.row(cons.v2);
-
-		RowVector3d currConstPos1 = QRot(origConstPos1, m1.orientation) + m1.COM;
-		RowVector3d currConstPos2 = QRot(origConstPos2, m2.orientation) + m2.COM;
+		Constraint cons(COLLISION, INEQUALITY, 0.0, 0.0, 0.0, 0.0, invMass1, invMass2, contactNormal, 0.0, CRCoeff);
 
 		MatrixXd currCOMPositions(2, 3); currCOMPositions << m1.COM, m2.COM;
-		MatrixXd currConstPositions(2, 3); currConstPositions << currConstPos1, currConstPos2;
+		MatrixXd currConstPositions(2, 3); currConstPositions << penPosition + depth * contactNormal, penPosition;
 		MatrixXd currCOMVelocities(2, 3); currCOMVelocities << m1.comVelocity, m2.comVelocity;
 		MatrixXd currAngVelocities(2, 3); currAngVelocities << m1.angVelocity, m2.angVelocity;
 
-		Matrix3d invInertiaTensor1 = m1.getCurrInvInertiaTensor();
-		Matrix3d invInertiaTensor2 = m2.getCurrInvInertiaTensor();
 		MatrixXd correctedCOMVelocities, correctedAngVelocities, correctedCOMPositions;
 
-		bool velisready = FALSE;
-		while (!velisready) {
-			velisready = cons.resolveVelocityConstraint(currCOMPositions, currConstPositions, currCOMVelocities, currAngVelocities,
-				invInertiaTensor1, invInertiaTensor2, correctedCOMVelocities, correctedAngVelocities, tolerance);
+		cons.resolveVelocityConstraint(currCOMPositions, currConstPositions, currCOMVelocities, currAngVelocities, m1.getCurrInvInertiaTensor(), m2.getCurrInvInertiaTensor(), correctedCOMVelocities, correctedAngVelocities, tolerance);
 
-			m1.comVelocity = correctedCOMVelocities.row(0);
-			m2.comVelocity = correctedCOMVelocities.row(1);
+		m1.comVelocity = correctedCOMVelocities.row(0);
+		m2.comVelocity = correctedCOMVelocities.row(1);
 
-			m1.angVelocity = correctedAngVelocities.row(0);
-			m2.angVelocity = correctedAngVelocities.row(1);
-		}
+		m1.angVelocity = correctedAngVelocities.row(0);
+		m2.angVelocity = correctedAngVelocities.row(1);
+		
+		cons.resolvePositionConstraint(currCOMPositions, currConstPositions, correctedCOMPositions, tolerance);
 
-		bool posisready = FALSE;
-		while (!posisready) {
-			posisready = cons.resolvePositionConstraint(currCOMPositions, currConstPositions, correctedCOMPositions, tolerance);
-
-			m1.COM = correctedCOMPositions.row(0);
-			m2.COM = correctedCOMPositions.row(1);
-		}
+		m1.COM = correctedCOMPositions.row(0);
+		m2.COM = correctedCOMPositions.row(1);
 
 		/***************
 		 TODO: practical 2
@@ -384,7 +368,7 @@ public:
 
 		//integrating velocity, position and orientation from forces and previous states
 		for (int i = 0; i < meshes.size(); i++)
-			meshes[i].integrate(timeStep, ARCoeff);
+			meshes[i].integrate(timeStep, ARCeoff);
 
 
 		//detecting and handling collisions when found
