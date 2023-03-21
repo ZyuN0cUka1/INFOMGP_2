@@ -40,10 +40,13 @@ public:
 		RowVector3d R1, R2; R1 << currVertexPositions.row(0) - currCOMPositions.row(0); R2 << currVertexPositions.row(1) - currCOMPositions.row(1);
 		RowVectorXd constGradient(12); constGradient << contactNormal, R1.cross(contactNormal), -contactNormal, -R2.cross(contactNormal);
 
-		if (constraintEqualityType == EQUALITY && abs(constGradient.dot(constGradient)) <= abs(tolerance))
-			return true;
-
+		correctedAngularVelocities = currAngularVelocities;
+		correctedCOMVelocities = currCOMVelocities;
 		RowVectorXd V(12); V << currCOMVelocities.row(0), currAngularVelocities.row(0), currCOMVelocities.row(1), currAngularVelocities.row(1);
+
+		if (constraintEqualityType == EQUALITY && abs(constGradient.dot(V)) <= abs(tolerance))
+			return true;
+		
 		MatrixXd invMassMatrix(MatrixXd::Identity(12, 12));
 		invMassMatrix.block<3, 3>(0, 0) = MatrixXd::Identity(3, 3) * invMass1;
 		invMassMatrix.block<3, 3>(3, 3) = invInertiaTensor1;
@@ -51,10 +54,6 @@ public:
 		invMassMatrix.block<3, 3>(9, 9) = invInertiaTensor2;
 		double lambda = -(1 + CRCoeff) * constGradient.dot(V) / (constGradient * invMassMatrix * constGradient.transpose()).sum();
 		RowVectorXd correctVector = lambda * invMassMatrix * constGradient.transpose();
-		cout << "velocity constraint:" << correctVector << endl;
-		
-		correctedCOMVelocities.resize(2, 3);
-		correctedAngularVelocities.resize(2, 3);
 
 		correctedAngularVelocities.block<1, 3>(0, 0) << correctVector.segment<3>(3) + currAngularVelocities.row(0);
 		correctedAngularVelocities.block<1, 3>(1, 0) << correctVector.segment<3>(9) + currAngularVelocities.row(1);
@@ -70,9 +69,11 @@ public:
 	bool resolvePositionConstraint(const MatrixXd& currCOMPositions, const MatrixXd& currConstPositions, MatrixXd& correctedCOMPositions, double tolerance) {
 
 		double depth = (currConstPositions.row(0) - currConstPositions.row(1)).norm() - refValue;
+		correctedCOMPositions = currCOMPositions;
 
-		if (constraintEqualityType == EQUALITY && abs(depth) <= abs(tolerance))
+		if (constraintEqualityType == EQUALITY && abs(depth) <= tolerance)
 			return true;
+
 		RowVector3d contactNormal = (currConstPositions.row(0) - currConstPositions.row(1)).normalized();
 		RowVectorXd constGradient(6); constGradient << contactNormal, -contactNormal;
 		MatrixXd invMassMatrix = MatrixXd::Zero(6, 6);
@@ -81,9 +82,7 @@ public:
 
 		double lambda = -depth / (constGradient * invMassMatrix * constGradient.transpose()).sum();
 		RowVectorXd correctVector = invMassMatrix * constGradient.transpose() * lambda;
-		cout << "position constraint:" << correctVector << endl;
 
-		correctedCOMPositions.resize(2, 3);
 		correctedCOMPositions.block<1, 3>(0, 0) << currCOMPositions.row(0) + correctVector.segment<3>(0);
 		correctedCOMPositions.block<1, 3>(1, 0) << currCOMPositions.row(1) + correctVector.segment<3>(3);
 
