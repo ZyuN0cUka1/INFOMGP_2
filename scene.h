@@ -364,7 +364,7 @@ public:
 
 	 You do not need to update this function in Practical 2
 	 *********************************************************************/
-	void updateScene(const double timeStep, const double CRCoeff, const double ARCeoff, const double tolerance, const int maxIterations) {
+	void updateScene(const double timeStep, const double CRCoeff, const double ARCeoff, const double FLCeoff, const double tolerance, const int maxIterations) {
 
 		//integrating velocity, position and orientation from forces and previous states
 		for (int i = 0; i < meshes.size(); i++)
@@ -411,7 +411,7 @@ public:
 			MatrixXd correctedCOMVelocities, correctedAngVelocities, correctedCOMPositions;
 
 			bool velocityWasValid = currConstraint.resolveVelocityConstraint(currCOMPositions, currConstPositions, currCOMVelocities, currAngVelocities, 
-				invInertiaTensor1, invInertiaTensor2, correctedCOMVelocities, correctedAngVelocities, tolerance);
+				invInertiaTensor1, invInertiaTensor2, correctedCOMVelocities, correctedAngVelocities, tolerance, FLCeoff);
 
 			if (velocityWasValid) {
 				zeroStreak++;
@@ -454,7 +454,7 @@ public:
 
 			MatrixXd correctedCOMPositions;
 
-			bool positionWasValid = currConstraint.resolvePositionConstraint(currCOMPositions, currConstPositions, correctedCOMPositions, tolerance);
+			bool positionWasValid = currConstraint.resolvePositionConstraint(currCOMPositions, currConstPositions, correctedCOMPositions, tolerance, FLCeoff);
 
 			if (positionWasValid) {
 				zeroStreak++;

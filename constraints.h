@@ -34,7 +34,7 @@ public:
 	//currCOMPositions is a 2x3 matrix, where each row is per one of the sides of the constraints; the rest of the relevant variables are similar, and so should the outputs be resized.
 	bool resolveVelocityConstraint(const MatrixXd& currCOMPositions, const MatrixXd& currVertexPositions, const MatrixXd& currCOMVelocities,
 		const MatrixXd& currAngularVelocities, const Matrix3d& invInertiaTensor1, const Matrix3d& invInertiaTensor2,
-		MatrixXd& correctedCOMVelocities, MatrixXd& correctedAngularVelocities, double tolerance) {
+		MatrixXd& correctedCOMVelocities, MatrixXd& correctedAngularVelocities, double tolerance, double Flexibility=1.0) {
 
 		RowVector3d contactNormal = (currVertexPositions.row(0) - currVertexPositions.row(1)).normalized();
 		RowVector3d R1, R2; R1 << currVertexPositions.row(0) - currCOMPositions.row(0); R2 << currVertexPositions.row(1) - currCOMPositions.row(1);
@@ -46,7 +46,8 @@ public:
 
 		if (constraintEqualityType == EQUALITY && abs(constGradient.dot(V)) <= abs(tolerance))
 			return true;
-		
+		if (constraintEqualityType == EQUALITY && abs((currVertexPositions.row(0) - currVertexPositions.row(1)).norm() - refValue) <= abs(Flexibility - 1) * refValue + tolerance)
+			return true;
 		MatrixXd invMassMatrix(MatrixXd::Identity(12, 12));
 		invMassMatrix.block<3, 3>(0, 0) = MatrixXd::Identity(3, 3) * invMass1;
 		invMassMatrix.block<3, 3>(3, 3) = invInertiaTensor1;
@@ -66,14 +67,14 @@ public:
 
 	//projects the position unto the constraint
 	//returns true if constraint was already valid with "currPositions"
-	bool resolvePositionConstraint(const MatrixXd& currCOMPositions, const MatrixXd& currConstPositions, MatrixXd& correctedCOMPositions, double tolerance) {
+	bool resolvePositionConstraint(const MatrixXd& currCOMPositions, const MatrixXd& currConstPositions, MatrixXd& correctedCOMPositions, double tolerance, double Flexibility=1.0) {
 
 		double depth = (currConstPositions.row(0) - currConstPositions.row(1)).norm() - refValue;
 		correctedCOMPositions = currCOMPositions;
 
-		if (constraintEqualityType == EQUALITY && abs(depth) <= tolerance)
+		if (constraintEqualityType == EQUALITY && abs(depth) <= abs(Flexibility - 1) * refValue + tolerance)
 			return true;
-
+			
 		RowVector3d contactNormal = (currConstPositions.row(0) - currConstPositions.row(1)).normalized();
 		RowVectorXd constGradient(6); constGradient << contactNormal, -contactNormal;
 		MatrixXd invMassMatrix = MatrixXd::Zero(6, 6);
@@ -82,6 +83,8 @@ public:
 
 		double lambda = -depth / (constGradient * invMassMatrix * constGradient.transpose()).sum();
 		RowVectorXd correctVector = invMassMatrix * constGradient.transpose() * lambda;
+		if (Flexibility != 1.0)
+			correctVector = correctVector.norm() > Flexibility * refValue ? (correctVector.norm() - Flexibility * refValue) * correctVector.normalized() : correctVector.setZero();
 
 		correctedCOMPositions.block<1, 3>(0, 0) << currCOMPositions.row(0) + correctVector.segment<3>(0);
 		correctedCOMPositions.block<1, 3>(1, 0) << currCOMPositions.row(1) + correctVector.segment<3>(3);
